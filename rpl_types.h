@@ -7,14 +7,15 @@
  * DAG: Direct Acyclic Graph
  * DAG root: node on the graph with no outgoing edge
  * Destination-Oriented DAG (DODAG): DAG rooted at a single destination (ie. DAG root) with no outgoing edges
- * 
+ *
  * Algorithm Overview:
  * Advertise presence with DIO (multicast)
  * Listen for DIO, use information to join/maintain DODAG
  * Provision routing entries for destinations in DIO message for next hop use
- * 
+ *
  * Progress:
  * 2015-01-16 - Ryan - Implemented structures and definitions up to page 50 of RFC
+ * 2015-02-16 - Ryan - Continuing structures and definitions up to page 54 of RFC
  *
  */
 
@@ -28,6 +29,26 @@
 #define RPL_ICMPV6_INFORMATION_TYPE         155     //!< ICMPv6 information message with type of 155 (may be) used for RPL control
 
 #define MAX_OPTION_DATA                     64      //!< Maximum size of control message option data fields
+
+#ifndef DEFAULT_PATH_CONTROL_SIZE
+//TODO: Default here
+#endif
+
+#ifndef DEFAULT_DIO_INTERVAL_DOUBLINGS
+//TODO: Default here
+#endif
+
+#ifndef DEFAULT_DIO_INTERVAL_MIN
+//TODO: Default here
+#endif
+
+#ifndef DEFAULT_DIO_REDUNDANCY_CONSTANT
+//TODO: Default here
+#endif
+
+#ifndef DEFAULT_MIN_HOP_RANK_INCREASE
+//TODO: Default here
+#endif
 
 enum rpl_control_message_e {
     RPL_DODAG_INFORMATION_SOLICITATION = 0x00,
@@ -177,9 +198,10 @@ enum rpl_dao_ack_status_e {
 #define RPL_DAO_ACK_STATUS_REJECTED(status)     ((status > 127) && (status <= 255))
 
 /**
- * @brief DODAG Information Solicitation (DIS)
- * @details [long description]
- *
+ * @brief Consistency Check (CC)
+ * @details The CC message is used to check secure message counters and issue
+ * challenge-responses.  A CC message MUST be sent as a secured RPL
+ * message.
  */
 struct rpl_cc_s {
     rpl_instance_t rpl_instance;            //!< RPL instance ID set by DODAG root to indicate which RPL instance the DODAG is part of.
@@ -197,27 +219,153 @@ enum rpl_cc_option_e {
     RPL_CC_OPTION_PADN = 0x01,
 };
 
-/***            RPL Option Structures, flags and enumerations             ***/
+/***            RPL Generic Option Structures, flags and enumerations      ***/
 
+/**
+ * Option type enumerations
+ *
+ */
+enum rpl_option_type_e {
+    RPL_OPTION_PAD1 = 0x00,                 //!< Pad1 Option
+    RPL_OPTION_PADN = 0x01,                 //!< PadN Option
+    RPL_OPTION_DAG_METRIC = 0x02,           //!< DAG Metric option
+    RPL_OPTION_ROUTE_INFO = 0x03,           //!< ROute information option
+    RPL_OPTION_DODAG_CONFIGURATION = 0x04,  //!< DODAG Configuration option
+    RPL_OPTION_RPL_TARGET = 0x05            //!< RPL target option
+};
+
+/**
+ * @brief Pad1 Option
+ * @details Used to insert a single octet of padding into a message to enable options alignment
+ * MAY be present in DIS, DIO, DAO, DAO-ACK, and CC messages
+ * nb. The format of the Pad1 option is a special case -- it has neither Option Length nor Option Data fields.
+ *
+ * Option Type: 0x00
+ */
 struct rpl_option_pad1_s {
 } rpl_option_pad1_s;
 
+/**
+ * @brief PadN Option
+ * @details The PadN option is used to insert two or more octets of padding into
+ * the message to enable options alignment.  PadN option data MUST be
+ * ignored by the receiver
+ * MAY be present in DIS, DIO, DAO, DAO-ACK, and CC messages
+ *
+ * Option Type: 0x01
+ * Length: For N octets of padding, where 2 <= N <= 7, the Option
+ *      Length field contains the value N-2.  An Option Length of 0
+ *      indicates a total padding of 2 octets.  An Option Length of 5
+ *      indicates a total padding of 7 octets, which is the maximum
+ *      padding size allowed with the PadN option.
+ * Option Data: For N (N > 1) octets of padding, the Option Data
+        consists of N-2 zero-valued octets.
+ */
 struct rpl_option_padN_s {
-	uint8_t padding[];
-}rpl_option_padN_s;
+    uint8_t padding[];
+} rpl_option_padN_s;
 
+/**
+ * @brief DAG Metric Container
+ * @details The DAG Metric Container is used to report metrics along the DODAG.
+ * The DAG Metric Container may contain a number of discrete node, link,
+ * and aggregate path metrics and constraints specified in [RFC6551] as
+ * chosen by the implementer.
+ * MAY be present in DIO or DAO messages
+ *
+ * Option Type: 0x02
+ * Option Length: The Option Length field contains the length in octets
+ *       of the Metric Data.
+ *
+ */
 struct rpl_option_dag_metric_s {
     uint8_t metric_data[];
-}rpl_option_dag_metric_s;
+} rpl_option_dag_metric_s;
 
+/**
+ * @brief Route Information Option (RIO)
+ * @details The RIO is used to indicate that connectivity to the specified
+ * destination prefix is available from the DODAG root.
+
+ * In the event that a RPL control message may need to specify
+ * connectivity to more than one destination, the RIO may be repeated.
+ *
+ * Option Type: 0x03
+ *
+ */
 struct rpl_option_route_info_s {
-	uint8_t prefix_length;
-	uint8_t flags;
-	uint32_t route_lifetime;
-	uint8_t prefix[];
-}rpl_option_route_info_s;
+    uint8_t prefix_length;     //!< Number of leading bits in the prefix that are valid (0 to 128)
+    uint8_t flags;             //!< Route info flags, contains Route Preference (PRF)
+    uint32_t route_lifetime;   //!< ROute lifetime, length of time in seconds that the prefix is valid for route determination
+    uint8_t prefix[];          //!< Variable length field containing an IP address or IPv6 prefix
+} rpl_option_route_info_s;
 
+#define RPL_OPTION_ROUTE_INFO_PRF_MASK      0x1f        //!< Route preference mask (in flags variable)
+#define RPL_OPTION_ROUTE_INGO_PRF_SHIFT     3           //!< Route preference shift (in flags variable)
 
+/**
+ * @brief DODAG Configuration option
+ * @details The DODAG Configuration option is used to distribute configuration
+ * information for DODAG Operation through the DODAG
+ * The information communicated in this option is generally static and
+ * unchanging within the DODAG, therefore it is not necessary to include
+ * in every DIO.
+ *
+ * Option Type: 0x04
+ * Option Length: 14
+ */
+struct rpl_option_dodag_configuration_s {
+    uint8_t flags;                  //!< DODAG configuration flags, contains Authentication Enabled flag and Path Control Size variable
+    uint8_t dio_int_double;         //!< DIO Interval doubling, used to configure IMax of the DIO Trickle Timer [rfc6550 section 8.3.1]
+    uint8_t dio_int_min;            //!< DIO Interval minimum, used to configure IMin of the DIO Trickle Timer [rfc6550 section 8.3.1]
+    uint8_t dio_redun;              //!< DIO Redundancy Constant, used to configure k of the DIO Trickle TImer [rfc6550 section 8.3.1]
+    uint16_t max_rank_increase;     //!< Max rank increase, used to configure DAGMaxRankIncrease, 0 to disable
+    uint16_t min_hop_rank_increase; //!< Minimum rank increase, used to configure MinHopRankIncrease [rfc6550 section 3.5.1]
+    uint16_t objective_code_point;  //!< Identifies the Objective Function (managed by IANA)
+    uint8_t reserved;               //!< Reserved field, must be initialized to zero by sender and ignored by receiver
+    uint8_t default_lifetime;       //!< Lifetime to be used as default for all RPL routes, lifetime = default * unit
+    uint16_t lifetime_unit;         //!< Lifetime unit, provides the unit in seconds used to express route lifetimes in RPL
+} rpl_option_dodag_configuration_s;
+
+#define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_MASK         0x0f        //!< Authentication enabled mask (see flags field)
+#define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT        3           //!< Authentication enabled shift
+#define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_ENABLED      (1<<RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT)
+#define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_DISABLED     (0<<RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT)
+
+#define RPL_OPTION_DODAG_CONFIG_PATH_CONTROL_SIZE_MASK      0x07        //!< Path control size mask (see flags field)
+#define RPL_OPTION_DODAG_CONFIG_PATH_CONTROL_SIZE_SHIFT     0           //!< Path control size shift (see flags field)
+
+/**
+ * @brief RPL Target Option
+ * @details The RPL Target option is used to indicate a Target IPv6 address,
+ * prefix, or multicast group that is reachable or queried along the
+ * DODAG.  In a DAO, the RPL Target option indicates reachability.
+ *
+ * Option Type: 0x05
+ */
+struct rpl_option_rpl_target_s {
+    uint8_t flags;             //!< Flags, reserved for future use
+    uint8_t prefix_length;     //!< Number of leading bits in the IPv6 prefix that are valid (0 to 128)
+    uint8_t prefix[];          //!< Variable length field containing an IPv6 destination address, prefix, or multicast group
+} rpl_option_rpl_target_s;
+
+//TODO: Continue here from page 54. Transit information
+
+/**
+ * @brief RPL generic option structure
+ * @details All options follow this format. Except Pad1.
+ */
+struct rpl_option_s {
+    uint8_t type;           //!< Option type (see rpl_option_type_e)
+    uint8_t length;         //!< Option length
+    union {
+        struct rpl_option_pad1_s pad1;
+        struct rpl_option_padN_s padN;
+        struct rpl_option_dag_metric_s dag_metric;
+        struct rpl_option_route_info_s route_info;
+        struct rpl_option_rpl_target_s rpl_target;
+    } data;
+} rpl_option_s;
 
 /***            RPL Security structures, flags and enumerations             ***/
 
@@ -330,5 +478,6 @@ struct rpl_secure_control_message_s {
     uint8_t option_length;
     uint8_t option_data[MAX_OPTION_DATA];
 };
+
 
 
