@@ -15,8 +15,11 @@
  *
  * Progress:
  * 2015-01-16 - Ryan - Implemented structures and definitions up to page 50 of RFC
- * 2015-02-16 - Ryan - Continuing structures and definitions up to page 54 of RFC
+ * 2015-02-16 - Ryan - Finished structure definitions, up to page 62 of RFC
  *
+ * TODO:
+ * Macros for size determination of complex structures
+ * Add packed attribute to all packed structures (and structures that should be packed)
  */
 
 #include <stdint.h>
@@ -226,12 +229,16 @@ enum rpl_cc_option_e {
  *
  */
 enum rpl_option_type_e {
-    RPL_OPTION_PAD1 = 0x00,                 //!< Pad1 Option
-    RPL_OPTION_PADN = 0x01,                 //!< PadN Option
-    RPL_OPTION_DAG_METRIC = 0x02,           //!< DAG Metric option
-    RPL_OPTION_ROUTE_INFO = 0x03,           //!< ROute information option
-    RPL_OPTION_DODAG_CONFIGURATION = 0x04,  //!< DODAG Configuration option
-    RPL_OPTION_RPL_TARGET = 0x05            //!< RPL target option
+    RPL_OPTION_PAD1 = 0x00,                 //!< Pad1 option type
+    RPL_OPTION_PADN = 0x01,                 //!< PadN option type
+    RPL_OPTION_DAG_METRIC = 0x02,           //!< DAG Metric option type
+    RPL_OPTION_ROUTE_INFO = 0x03,           //!< ROute Information option type
+    RPL_OPTION_DODAG_CONFIGURATION = 0x04,  //!< DODAG Configuration option type
+    RPL_OPTION_RPL_TARGET = 0x05,           //!< RPL Target option type
+    RPL_OPTION_TRANSIT_INFO = 0x06,         //!< Transit Information option type
+    RPL_OPTION_SOLICITED_INFO = 0x07,       //!< Solicited Information option type
+    RPL_OPTION_PREFIX_INFO = 0x08,          //!< Prefix Information option type
+    RPL_OPTION_TARGET_DESCRIPTOR = 0x09     //!< Target Descriptor option type
 };
 
 /**
@@ -327,7 +334,7 @@ struct rpl_option_dodag_configuration_s {
     uint16_t lifetime_unit;         //!< Lifetime unit, provides the unit in seconds used to express route lifetimes in RPL
 } rpl_option_dodag_configuration_s;
 
-#define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_MASK         0x0f        //!< Authentication enabled mask (see flags field)
+#define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_MASK         0x08        //!< Authentication enabled mask (see flags field)
 #define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT        3           //!< Authentication enabled shift
 #define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_ENABLED      (1<<RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT)
 #define RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_DISABLED     (0<<RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT)
@@ -349,7 +356,113 @@ struct rpl_option_rpl_target_s {
     uint8_t prefix[];          //!< Variable length field containing an IPv6 destination address, prefix, or multicast group
 } rpl_option_rpl_target_s;
 
-//TODO: Continue here from page 54. Transit information
+
+/**
+ * @brief Transit Information Option
+ * @details The Transit Information option is used for a node to indicate
+ * attributes for a path to one or more destinations.  The destinations
+ * are indicated by one or more Target options that immediately precede
+ * the Transit Information option(s).
+ *
+ * MAY be present in DAO messages
+ * Option Type: 0x06
+ *
+ *
+ */
+struct rpl_option_transit_info_s {
+    uint8_t flags;                      //!< Flags, includes External(E) flag
+    uint8_t path_control;               //!< Path Control, limits dumber of parents to which DAO messages can be sent
+    uint8_t path_sequence;              //!< Path sequence, issued by nod owning a target prefix when issuing new RPL target options
+    uint8_t path_lifetime;              //!< Path lifetime, length of time in lifetime units that the prefix is valid for route determination (0xFF is infinite, 0x00 is unreachable)
+    uint8_t parent_address[];           //!< Parent Address (optional), IPv6 address of DODAG parent of issuing node
+} rpl_option_transit_info_s;
+
+#define RPL_OPTION_TRANSIT_INFO_EXTERNAL_MASK           0x80    //!< External flag mask (see flags)
+#define RPL_OPTION_TRANSIT_INFO_EXTERNAL_SHIFT          7       //!< External flag shift (see flags)
+#define RPL_OPTION_TRANSIT_INFO_EXTERNAL_ON             (1<<RPL_OPTION_TRANSIT_INFO_EXTERNAL_SHIFT)
+#define RPL_OPTION_TRANSIT_INFO_EXTERNAL_OFF            (0<<RPL_OPTION_TRANSIT_INFO_EXTERNAL_SHIFT)
+#define RPL_OPTION_TRANSIT_INFO_PATH_CONTROL_PC1_MASK   0xC0    //!< Path control subfield 1 mask
+#define RPL_OPTION_TRANSIT_INFO_PATH_CONTROL_PC2_MASK   0x30    //!< Path control subfield 2 mask
+#define RPL_OPTION_TRANSIT_INFO_PATH_CONTROL_PC3_MASK   0x0C    //!< Path control subfield 3 mask
+#define RPL_OPTION_TRANSIT_INFO_PATH_CONTROL_PC4_MASK   0x0A    //!< Path control subfield 4 mask
+
+/**
+ * @brief Solicited Information Option
+ * @details Used for a node to request DIO
+ * messages from a subset of neighboring nodes.  The Solicited
+ * Information option may specify a number of predicate criteria to be
+ * matched by a receiving node.
+ *
+ * Option Type: 0x07
+ * Option Length: 19
+ */
+struct rpl_option_solicited_info_s {
+    uint8_t rpl_instance_id;            //!< RPL Instance ID that is being solicited (when valid)
+    uint8_t flags;                      //!< Flags, contains Version Predicate (V), Instance Predicate (I) and DODAG ID Predicate (D)
+    uint8_t dodag_id[16];               //!< DODAG identifier (when valid)
+    uint8_t version_number;             //!< Value of DODAG version (when valid)
+} rpl_option_solicited_info_s;
+
+#define RPL_OPTION_SOLICITED_INFO_VERSION_MASK         0x80        //!< Version predicate mask (see flags field)
+#define RPL_OPTION_SOLICITED_INFO_VERSION_SHIFT        7           //!< Version predicate shift
+#define RPL_OPTION_SOLICITED_INFO_VERSION_VALID        (1<<RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT)
+#define RPL_OPTION_SOLICITED_INFO_VERSION_INVALID      (0<<RPL_OPTION_DODAG_CONFIG_AUTHENTICATION_SHIFT)
+#define RPL_OPTION_SOLICITED_INFO_INSTANCE_MASK        0x40        //!< Instance predicate mask (see flags field)
+#define RPL_OPTION_SOLICITED_INFO_INSTANCE_SHIFT       6           //!< Instance predicate shift
+#define RPL_OPTION_SOLICITED_INFO_INSTANCE_VALID       (1<<RPL_OPTION_SOLICITED_INFO_INSTANCE_SHIFT)
+#define RPL_OPTION_SOLICITED_INFO_INSTANCE_INVALID     (0<<RPL_OPTION_SOLICITED_INFO_INSTANCE_SHIFT)
+#define RPL_OPTION_SOLICITED_INFO_DODAGID_MASK         0x20        //!< DODAG ID predicate mask (see flags field)
+#define RPL_OPTION_SOLICITED_INFO_DODAGID_SHIFT        5           //!< DODAG ID predicate shift
+#define RPL_OPTION_SOLICITED_INFO_DODAGID_VALID        (1<<RPL_OPTION_SOLICITED_INFO_DODAGID_SHIFT)
+#define RPL_OPTION_SOLICITED_INFO_DODAGID_INVALID      (0<<RPL_OPTION_SOLICITED_INFO_DODAGID_SHIFT)
+
+/**
+ * @brief Prefix Information Option
+ * @details carries the information that is specified for the IPv6 ND Prefix
+ * Information option in [RFC4861], [RFC4862], and [RFC6275] for use by
+ * RPL nodes and IPv6 hosts
+ *
+ * MAY be present in DIO messages
+ * Option Type: 0x08
+ * Option Length: 30.  Note that this length is expressed in units of single octets, unlike in IPv6 ND.
+ */
+struct rpl_option_prefix_info_s {
+    uint8_t prefix_length;              //!< Number of leading bits in the prefix field that are valid
+    uint8_t flags;                      //!< Flags. On Link (L), Autonomous Address Config (A), Router Address (R)
+    uint32_t valid_lifetime;            //!< Length of time in s that the prefix is valid for on-link determination
+    uint32_t preferred_lifetime;        //!< Length of time in s that the addresses generated by stateless autoconfig remain preferred. 0xFFFFFFFF indicated infinity
+    uint32_t reserved2;                 //!< Unused field, MUST be initialized to zero and ignored by receiver
+    uint8_t prefix[];                   //!< IPv6 Address or Prefix
+} rpl_option_prefix_info_s;
+
+#define RPL_OPTION_PREFIX_INFO_ON_LINK_MASK                 0x80        //!< On-Link Flag mask, indicates prefix can be used for on link determination
+#define RPL_OPTION_PREFIX_INFO_ON_LINK_SHIFT                7           //!< On-Link Flag shift
+#define RPL_OPTION_PREFIX_INFO_ON_LINK_VALID                (1<<RPL_OPTION_PREFIX_INFO_ON_LINK_SHIFT)
+#define RPL_OPTION_PREFIX_INFO_ON_LINK_INVALID              (0<<RPL_OPTION_PREFIX_INFO_ON_LINK_SHIFT)
+#define RPL_OPTION_PREFIX_INFO_AUTO_ADDRESS_MASK            0x40        //!< Autonomous Address Config Flag mask, indicates this prefix can be used for stateless address configuration
+#define RPL_OPTION_PREFIX_INFO_AUTO_ADDRESS_SHIFT           6           //!< Autonomous Address Config Flag shift
+#define RPL_OPTION_PREFIX_INFO_AUTO_ADDRESS_VALID           (1<<RPL_OPTION_PREFIX_INFO_AUTO_ADDRESS_SHIFT)
+#define RPL_OPTION_PREFIX_INFO_AUTO_ADDRESS_INVALID         (0<<RPL_OPTION_PREFIX_INFO_AUTO_ADDRESS_SHIFT)
+#define RPL_OPTION_PREFIX_INFO_ROUTER_ADDRESS_MASK          0x20        //!< Router Address Flag mask, indicates the prefix contains a complete IPv6 address that can be used as a parent
+#define RPL_OPTION_PREFIX_INFO_ROUTER_ADDRESS_SHIFT         5           //!< Router Address Flag shift
+#define RPL_OPTION_PREFIX_INFO_ROUTER_ADDRESS_VALID         (1<<RPL_OPTION_PREFIX_INFO_ROUTER_ADDRESS_SHIFT)
+#define RPL_OPTION_PREFIX_INFO_ROUTER_ADDRESS_INVALID       (0<<RPL_OPTION_PREFIX_INFO_ROUTER_ADDRESS_SHIFT)
+
+/**
+ * @brief Target Descriptor Option
+ * @details used to qualify a target, something that is sometimes called "tagging".
+ * 
+ * At most, there can be one descriptor per target.  The descriptor is
+ * set by the node that injects the Target in the RPL network.  It MUST
+ * be copied but not modified by routers that propagate the Target Up
+ * the DODAG in DAO messages.
+ * 
+ * Option Type: 0x09
+ * Option Length: 4
+ */
+struct rpl_option_target_descriptor_s {
+    uint32_t descriptor;                //!< RPL target descriptor
+} rpl_option_target_descriptor_s;
 
 /**
  * @brief RPL generic option structure
@@ -364,7 +477,11 @@ struct rpl_option_s {
         struct rpl_option_dag_metric_s dag_metric;
         struct rpl_option_route_info_s route_info;
         struct rpl_option_rpl_target_s rpl_target;
-    } data;
+        struct rpl_option_transit_info_s transit_info;
+        struct rpl_option_solicited_info_s solicited_info;
+        struct rpl_option_prefix_info_s prefix_info;
+        struct rpl_option_target_descriptor_s target_descriptor;
+    };
 } rpl_option_s;
 
 /***            RPL Security structures, flags and enumerations             ***/
