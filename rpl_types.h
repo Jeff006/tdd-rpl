@@ -12,6 +12,10 @@
  * Advertise presence with DIO (multicast)
  * Listen for DIO, use information to join/maintain DODAG
  * Provision routing entries for destinations in DIO message for next hop use
+ * 
+ * Notes:
+ *  - Macros used in place of bit operators for portability
+ *  - Implementation to favour readability over efficiency
  *
  * Progress:
  * 2015-01-16 - Ryan - Implemented structures and definitions up to page 50 of RFC
@@ -19,7 +23,7 @@
  *
  * TODO:
  * Macros for size determination of complex structures
- * Add packed attribute to all packed structures (and structures that should be packed)
+ * Add packed attribute to all message structures (and structures that should be packed)
  */
 
 #include <stdint.h>
@@ -597,4 +601,8 @@ struct rpl_secure_control_message_s {
 };
 
 
+// Sequence Counter Information
+#define RPL_SEQUENCE_WINDOW         16      //!< Sequence window for comparison of sequence counter values, see [RFC6550 Page 64]
+#define RPL_SEQUENCE_INITIAL        240     //!< Initial RPL sequence counter value [RFC6550 Page 64]
+#define RPL_SEQUENCE_MAX            255     //!< Maximum sequence counter value
 
