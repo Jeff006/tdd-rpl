@@ -1,17 +1,19 @@
-
 #include "rpl.h"
 
 //TODO: sequence counter stuff, section 7.2
 
 int RPL_sequence_is_comparable(int a, int b) {
+	//TODO
 	return 0;
 }
 
 int RPL_sequence_is_greater(int a, int b) {
+	//TODO
 	return 0;
 }
 
 int RPL_sequence_is_lesser(int a, int b) {
+	//TODO
 	return 0;
 }
 

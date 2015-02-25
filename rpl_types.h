@@ -1,4 +1,3 @@
-
 /**
  * RPL module
  * Based on https://tools.ietf.org/html/rfc6550
@@ -16,10 +15,12 @@
  * Notes:
  *  - Macros used in place of bit operators for portability
  *  - Implementation to favour readability over efficiency
+ *  - Implementation to be defined by tests from RFC
  *
  * Progress:
  * 2015-01-16 - Ryan - Implemented structures and definitions up to page 50 of RFC
  * 2015-02-16 - Ryan - Finished structure definitions, up to page 62 of RFC
+ * 2015-02-24 - Ryan - Added sequence counter tests from RFC
  *
  * TODO:
  * Macros for size determination of complex structures
